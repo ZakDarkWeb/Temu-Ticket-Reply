@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Temu Ticket Automation Settings</title>
+  <style>
+    :root { color-scheme: light; --orange: #ff6a00; --ink: #172033; --muted: #697386; --line: #e7eaf0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f5f7fb; font-family: Inter, Arial, sans-serif; color: var(--ink); }
+    .shell { max-width: 880px; margin: 0 auto; padding: 34px 20px 60px; }
+    .topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 26px; }
+    .brand-icon { width: 46px; height: 46px; border-radius: 12px; object-fit: cover; box-shadow: 0 4px 12px rgba(23,32,51,.16); }
+    h1 { margin: 0; font-size: 25px; letter-spacing: -.2px; }
+    .subtitle { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
+    .panel { background: #fff; border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 8px 28px rgba(23,32,51,.06); overflow: hidden; }
+    .panel-head { padding: 21px 24px 18px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 15px; }
+    .panel-head h2 { margin: 0; font-size: 17px; }
+    .panel-head p { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+    .list { padding: 10px 18px 4px; }
+    .message-row { padding: 14px 6px 16px; border-bottom: 1px solid var(--line); }
+    .message-row:last-child { border-bottom: 0; }
+    .row-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+    .variant { font-size: 13px; font-weight: 700; }
+    .counter { color: var(--muted); font-size: 11px; }
+    textarea { width: 100%; min-height: 76px; resize: vertical; border: 1px solid #d6dbe5; border-radius: 8px; padding: 10px 11px; color: var(--ink); font: 13px/1.45 Arial, sans-serif; outline: none; }
+    textarea:focus { border-color: var(--orange); box-shadow: 0 0 0 3px rgba(255,106,0,.12); }
+    .row-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+    .move-actions { display: flex; gap: 6px; }
+    .icon-btn, .delete-btn, .add-btn, .save-btn { border: 0; border-radius: 7px; cursor: pointer; font-weight: 700; }
+    .icon-btn { width: 30px; height: 28px; background: #f1f3f7; color: #394458; }
+    .icon-btn:hover { background: #e4e8ef; }
+    .delete-btn { padding: 7px 10px; background: #fff1ef; color: #b3261e; font-size: 11px; }
+    .delete-btn:hover { background: #ffe2df; }
+    .footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 24px 22px; border-top: 1px solid var(--line); }
+    .add-btn { padding: 10px 14px; background: #fff3eb; color: #c44f00; }
+    .save-btn { padding: 10px 17px; background: var(--orange); color: #fff; }
+    .add-btn:hover { background: #ffe6d5; }
+    .save-btn:hover { background: #e95f00; }
+    #status { min-height: 18px; color: #16803c; font-size: 12px; }
+    .note { margin-top: 13px; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    @media (max-width: 600px) { .panel-head, .footer { align-items: flex-start; flex-direction: column; } .footer { gap: 10px; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="topbar">
+      <img class="brand-icon" src="icons/icon128.png" alt="">
+      <div><h1>Temu Ticket Automation</h1><div class="subtitle">Professional reply message settings</div></div>
+    </div>
+    <section class="panel">
+      <div class="panel-head"><div><h2>Reply message library</h2><p>Messages cycle in order for each ticket. Every message must stay within 1500 characters.</p></div></div>
+      <div id="messages" class="list"></div>
+      <div class="footer">
+        <button id="add" class="add-btn" type="button">＋ Add new message</button>
+        <div><span id="status"></span> <button id="save" class="save-btn" type="button">Save changes</button></div>
+      </div>
+    </section>
+    <div class="note">Move messages with the ↑ and ↓ buttons. Delete any message you no longer need. At least one message is required.</div>
+  </main>
+  <script src="options.js"></script>
+</body>
+</html>

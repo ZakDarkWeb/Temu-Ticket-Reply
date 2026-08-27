@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Temu Ticket Automation",
+  "version": "2.3.1",
+  "description": "Fast Temu ticket automation with draggable controls and 15 rotating remarks.",
+  "permissions": ["tabs", "storage"],
+  "host_permissions": ["https://seller.temu.com/*"],
+  "action": {
+    "default_title": "Temu Ticket Automation",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_page": "options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*"],
+      "matches": ["https://seller.temu.com/*"]
+    }
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://seller.temu.com/ticket-list.html*"],
+      "js": ["ticket-list.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://seller.temu.com/ticket-detail.html*"],
+      "js": ["ticket-detail.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
