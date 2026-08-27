@@ -256,14 +256,13 @@ function createCard() {
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
     @keyframes ttbo-pulse-ring {
-      0%   { transform: scale(0.92); opacity: 0.85; }
-      50%  { transform: scale(1.10); opacity: 0.3; }
-      100% { transform: scale(0.92); opacity: 0.85; }
+      0%   { transform: scale(0.95); opacity: 0.9; }
+      100% { transform: scale(1.35); opacity: 0; }
     }
     @keyframes ttbo-pulse-glow {
-      0%   { box-shadow: 0 0 0 0 rgba(255,106,0,0.6), 0 6px 20px rgba(255,106,0,0.4); }
-      50%  { box-shadow: 0 0 0 10px rgba(255,106,0,0.0), 0 6px 28px rgba(255,106,0,0.2); }
-      100% { box-shadow: 0 0 0 0 rgba(255,106,0,0.6), 0 6px 20px rgba(255,106,0,0.4); }
+      0%   { box-shadow: 0 4px 16px rgba(0,0,0,0.12), 0 0 0 0 rgba(255,106,0,0.3); }
+      70%  { box-shadow: 0 6px 20px rgba(0,0,0,0.15), 0 0 0 8px rgba(255,106,0,0); }
+      100% { box-shadow: 0 4px 16px rgba(0,0,0,0.12), 0 0 0 0 rgba(255,106,0,0); }
     }
     @keyframes ttbo-shimmer {
       0%   { background-position: -200% center; }
@@ -440,31 +439,40 @@ function createCard() {
     #${CARD_ID} .ttbo-mini {
       display: none; position: relative;
       width: 52px; height: 52px;
-      padding: 0; border: none; border-radius: 50%;
-      background: radial-gradient(circle at 35% 30%, #ff9a3c, #ff6a00 55%, #c94900 90%);
+      padding: 3px; border: none; border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12), 0 2px 4px rgba(0,0,0,0.06);
       cursor: grab; touch-action: none; overflow: visible;
-      animation: ttbo-pulse-glow 2.4s ease-in-out infinite;
+      animation: ttbo-pulse-glow 2s ease-in-out infinite;
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease;
     }
+    #${CARD_ID} .ttbo-mini:hover {
+      transform: scale(1.05);
+      box-shadow: 0 8px 24px rgba(255,106,0,0.18), 0 4px 8px rgba(0,0,0,0.08);
+      animation-play-state: paused;
+    }
+    #${CARD_ID} .ttbo-mini:active { cursor: grabbing; transform: scale(0.98); }
     #${CARD_ID} .ttbo-mini::before {
       content: '';
-      position: absolute; inset: -8px; border-radius: 50%;
-      border: 2.5px solid rgba(255,140,0,0.5);
-      animation: ttbo-pulse-ring 2.4s ease-in-out infinite;
+      position: absolute; inset: 0; border-radius: 50%;
+      padding: 2px;
+      background: linear-gradient(135deg, #ff6a00, #ff8c38);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+              mask-composite: exclude;
       pointer-events: none;
     }
     #${CARD_ID} .ttbo-mini::after {
       content: '';
-      position: absolute; inset: -17px; border-radius: 50%;
-      border: 1.5px solid rgba(255,140,0,0.22);
-      animation: ttbo-pulse-ring 2.4s ease-in-out infinite 0.4s;
+      position: absolute; inset: -4px; border-radius: 50%;
+      border: 1.5px solid rgba(255,106,0,0.4);
+      animation: ttbo-pulse-ring 2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
       pointer-events: none;
     }
-    #${CARD_ID} .ttbo-mini:active { cursor: grabbing; animation: none; }
     #${CARD_ID} .ttbo-mini img {
       display: block; width: 100%; height: 100%;
       object-fit: cover; border-radius: 50%;
       pointer-events: none;
-      border: 2.5px solid rgba(255,255,255,0.3);
     }
   `;
   document.documentElement.appendChild(style);
