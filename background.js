@@ -1,6 +1,7 @@
 const DEFAULT_DELAY_MS = 2500;
 const JOB_KEY_PREFIX = "temuTicketJob:";
 const FAILURE_KEY = "temuTicketAutomationFailures";
+const CONFIG_KEY = "temuTicketAutomationConfig";
 const STATE_KEY = "temuTicketBatchState";
 
 function sleep(ms) {
@@ -109,9 +110,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       await chrome.storage.local.remove(jobKey(tabId));
       await updateBatchState(job.id, success);
 
+      const configResult = await chrome.storage.local.get(CONFIG_KEY);
+      const autoClose = configResult[CONFIG_KEY]?.autoClose !== false;
+
       if (success) {
-        sendResponse({ ok: true, closed: true });
-        setTimeout(() => chrome.tabs.remove(tabId).catch(() => {}), 700);
+        sendResponse({ ok: true, closed: autoClose });
+        if (autoClose) {
+          setTimeout(() => chrome.tabs.remove(tabId).catch(() => {}), 700);
+        }
       } else {
         const stored = await chrome.storage.local.get(FAILURE_KEY);
         const failures = Array.isArray(stored[FAILURE_KEY]) ? stored[FAILURE_KEY] : [];

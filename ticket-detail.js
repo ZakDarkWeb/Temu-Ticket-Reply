@@ -153,22 +153,30 @@ async function runAutomation(job) {
   const remark = await waitFor("Remark box", () => findVisibleInput("Please input"));
   setNativeValue(remark, job.message || "");
 
-  // This is Temu's final submit button. It is intentionally automatic per user instruction.
-  const modalConfirm = await waitFor("reply submit button", findReplyModalConfirm);
-  clickNode(modalConfirm);
+  const configKey = "temuTicketAutomationConfig";
+  const configResult = await chrome.storage.local.get(configKey);
+  const autoSubmit = configResult[configKey]?.autoSubmit !== false;
 
-  // Allow Temu's submit handler to finish before considering a fallback click.
-  await sleep(1200);
-  if (findVisibleInput("Please input")) {
-    const retryConfirm = findReplyModalConfirm();
-    if (retryConfirm) {
-      clickNode(retryConfirm);
-      await sleep(800);
+  if (autoSubmit) {
+    // This is Temu's final submit button. It is intentionally automatic per user instruction.
+    const modalConfirm = await waitFor("reply submit button", findReplyModalConfirm);
+    clickNode(modalConfirm);
+
+    // Allow Temu's submit handler to finish before considering a fallback click.
+    await sleep(1200);
+    if (findVisibleInput("Please input")) {
+      const retryConfirm = findReplyModalConfirm();
+      if (retryConfirm) {
+        clickNode(retryConfirm);
+        await sleep(800);
+      }
     }
+    // Closing the Reply modal is the success signal. If it stays open, leave the tab open for review.
+    await waitFor("reply submission", () => !findVisibleInput("Please input") && !findVisibleInput("Please select"), 20000);
+  } else {
+    // If auto-submit is turned off, pause and wait for the user to manually submit
+    await waitFor("manual reply submission by user", () => !findVisibleInput("Please input") && !findVisibleInput("Please select"), 999999);
   }
-
-  // Closing the Reply modal is the success signal. If it stays open, leave the tab open for review.
-  await waitFor("reply submission", () => !findVisibleInput("Please input") && !findVisibleInput("Please select"), 20000);
 }
 
 (async () => {

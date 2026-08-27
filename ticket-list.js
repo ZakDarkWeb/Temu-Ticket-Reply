@@ -133,9 +133,59 @@ function setMinimized(card, minimized) {
   }
 }
 
+function updateProgressUI(state) {
+  const container = document.getElementById("ttbo-progress-container");
+  const text = document.getElementById("ttbo-progress-text");
+  const fill = document.getElementById("ttbo-progress-fill");
+  
+  if (!state || (!Array.isArray(state.reservedIds) && !Array.isArray(state.completedIds))) {
+    if (container) container.style.display = "none";
+    return;
+  }
+  
+  const completed = Array.isArray(state.completedIds) ? state.completedIds.length : 0;
+  const reserved = Array.isArray(state.reservedIds) ? state.reservedIds.length : 0;
+  const total = completed + reserved;
+  
+  if (total === 0) {
+    if (container) container.style.display = "none";
+    return;
+  }
+  
+  if (container) container.style.display = "block";
+  if (text) text.textContent = `${completed} / ${total} Done`;
+  
+  const percent = Math.min(100, Math.round((completed / total) * 100));
+  if (fill) fill.style.width = `${percent}%`;
+}
+
+function updateButtonText(batchSize) {
+  const textNode = document.getElementById("ttbo-btn-text");
+  if (textNode) {
+    textNode.textContent = `Run Next ${batchSize} Tickets`;
+  }
+}
+
 async function restoreCardState(card) {
   await restoreCardPosition(card);
   setMinimized(card, true);
+
+  const configResult = await chrome.storage.local.get(CONFIG_KEY);
+  const config = configResult[CONFIG_KEY] || {};
+  
+  const submitCheck = card.querySelector("#ttbo-toggle-submit");
+  const closeCheck = card.querySelector("#ttbo-toggle-close");
+  const batchSelect = card.querySelector("#ttbo-batch-select");
+  
+  if (submitCheck) submitCheck.checked = config.autoSubmit !== false;
+  if (closeCheck) closeCheck.checked = config.autoClose !== false;
+  
+  const size = config.batchSize || 10;
+  if (batchSelect) batchSelect.value = String(size);
+  updateButtonText(size);
+
+  const stateResult = await chrome.storage.local.get(STATE_KEY);
+  updateProgressUI(stateResult[STATE_KEY]);
 }
 
 function makeCardDraggable(card) {
@@ -225,15 +275,51 @@ function createCard() {
         </button>
       </div>
 
-      <div class="ttbo-info-row">
-        <div class="ttbo-chip">📦 10/batch</div>
-        <div class="ttbo-chip">🔄 Auto-submit</div>
-        <div class="ttbo-chip">✅ Auto-close</div>
+      <!-- Live Batch Progress Bar -->
+      <div class="ttbo-progress-wrap" id="ttbo-progress-container" style="display: none;">
+        <div class="ttbo-progress-header">
+          <span class="ttbo-progress-title">⚡ Live Progress</span>
+          <span class="ttbo-progress-counter" id="ttbo-progress-text">0 / 0 Done</span>
+        </div>
+        <div class="ttbo-progress-bar-bg">
+          <div class="ttbo-progress-bar-fill" id="ttbo-progress-fill" style="width: 0%;"></div>
+        </div>
+      </div>
+
+      <!-- Controls & Toggles panel -->
+      <div class="ttbo-controls-panel">
+        <div class="ttbo-control-row">
+          <span class="ttbo-control-label">Batch Size</span>
+          <select id="ttbo-batch-select" class="ttbo-select">
+            <option value="5">5 Tickets</option>
+            <option value="10">10 Tickets</option>
+            <option value="15">15 Tickets</option>
+            <option value="20">20 Tickets</option>
+          </select>
+        </div>
+
+        <div class="ttbo-divider"></div>
+
+        <div class="ttbo-toggle-row">
+          <span class="ttbo-toggle-text">Auto-submit remarks</span>
+          <label class="ttbo-switch">
+            <input type="checkbox" id="ttbo-toggle-submit" checked>
+            <span class="ttbo-slider"></span>
+          </label>
+        </div>
+
+        <div class="ttbo-toggle-row">
+          <span class="ttbo-toggle-text">Auto-close successful tabs</span>
+          <label class="ttbo-switch">
+            <input type="checkbox" id="ttbo-toggle-close" checked>
+            <span class="ttbo-slider"></span>
+          </label>
+        </div>
       </div>
 
       <button type="button" class="ttbo-run-btn" data-open>
         <span class="ttbo-btn-icon">▶</span>
-        <span>Run Next 10 Tickets</span>
+        <span id="ttbo-btn-text">Run Next Tickets</span>
       </button>
 
       <div class="ttbo-status-wrap">
@@ -359,17 +445,126 @@ function createCard() {
       color: #fff;
     }
 
-    /* ── Body ── */
-    #${CARD_ID} .ttbo-info-row {
-      display: flex; gap: 6px; flex-wrap: wrap;
-      padding: 10px 14px 0;
-    }
-    #${CARD_ID} .ttbo-chip {
-      font-size: 10px; font-weight: 500;
-      padding: 3px 8px; border-radius: 20px;
-      background: #f1f5f9; color: #475569;
+    /* ── Controls panel ── */
+    #${CARD_ID} .ttbo-controls-panel {
+      background: #f8fafc;
       border: 1px solid #e2e8f0;
-      white-space: nowrap;
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin: 12px 14px 0;
+    }
+    #${CARD_ID} .ttbo-control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 600;
+      color: #475569;
+    }
+    #${CARD_ID} .ttbo-select {
+      padding: 4px 8px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      font-family: inherit;
+      color: #475569;
+      background-color: #ffffff;
+      outline: none;
+      cursor: pointer;
+    }
+    #${CARD_ID} .ttbo-select:focus {
+      border-color: #ff6a00;
+    }
+    #${CARD_ID} .ttbo-divider {
+      height: 1px;
+      background: #e2e8f0;
+      margin: 8px 0;
+    }
+    #${CARD_ID} .ttbo-toggle-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 500;
+      color: #475569;
+      margin: 6px 0;
+    }
+    #${CARD_ID} .ttbo-toggle-row:last-child {
+      margin-bottom: 0;
+    }
+    #${CARD_ID} .ttbo-toggle-row:first-of-type {
+      margin-top: 0;
+    }
+    #${CARD_ID} .ttbo-toggle-text {
+      font-weight: 500;
+    }
+
+    /* Switch toggle slider styling */
+    #${CARD_ID} .ttbo-switch {
+      position: relative;
+      display: inline-block;
+      width: 32px;
+      height: 18px;
+    }
+    #${CARD_ID} .ttbo-switch input { 
+      opacity: 0; width: 0; height: 0;
+    }
+    #${CARD_ID} .ttbo-slider {
+      position: absolute; cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #cbd5e1;
+      transition: .2s;
+      border-radius: 18px;
+    }
+    #${CARD_ID} .ttbo-slider:before {
+      position: absolute; content: "";
+      height: 12px; width: 12px;
+      left: 3px; bottom: 3px;
+      background-color: white;
+      transition: .2s;
+      border-radius: 50%;
+    }
+    #${CARD_ID} .ttbo-switch input:checked + .ttbo-slider {
+      background-color: #ff6a00;
+    }
+    #${CARD_ID} .ttbo-switch input:checked + .ttbo-slider:before {
+      transform: translateX(14px);
+    }
+
+    /* ── Progress bar ── */
+    #${CARD_ID} .ttbo-progress-wrap {
+      padding: 12px 14px 0;
+    }
+    #${CARD_ID} .ttbo-progress-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 5px;
+      font-size: 10px;
+    }
+    #${CARD_ID} .ttbo-progress-title {
+      font-weight: 700;
+      color: #ff6a00;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    #${CARD_ID} .ttbo-progress-counter {
+      font-weight: 600;
+      color: #475569;
+    }
+    #${CARD_ID} .ttbo-progress-bar-bg {
+      width: 100%;
+      height: 6px;
+      background: #e2e8f0;
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    #${CARD_ID} .ttbo-progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #ff6a00, #ff8c38);
+      border-radius: 3px;
+      transition: width 0.4s ease;
     }
 
     /* ── Run button ── */
@@ -467,12 +662,46 @@ function createCard() {
 
   // Mini button open/restore is handled in onWindowPointerUp (drag-aware).
 
+  card.querySelector("#ttbo-toggle-submit").addEventListener("change", async (e) => {
+    const configResult = await chrome.storage.local.get(CONFIG_KEY);
+    const config = configResult[CONFIG_KEY] || {};
+    config.autoSubmit = e.target.checked;
+    await chrome.storage.local.set({ [CONFIG_KEY]: config });
+  });
+
+  card.querySelector("#ttbo-toggle-close").addEventListener("change", async (e) => {
+    const configResult = await chrome.storage.local.get(CONFIG_KEY);
+    const config = configResult[CONFIG_KEY] || {};
+    config.autoClose = e.target.checked;
+    await chrome.storage.local.set({ [CONFIG_KEY]: config });
+  });
+
+  card.querySelector("#ttbo-batch-select").addEventListener("change", async (e) => {
+    const size = Number(e.target.value);
+    const configResult = await chrome.storage.local.get(CONFIG_KEY);
+    const config = configResult[CONFIG_KEY] || {};
+    config.batchSize = size;
+    await chrome.storage.local.set({ [CONFIG_KEY]: config });
+    updateButtonText(size);
+  });
+
+  // Listen for background batch updates to draw live progress
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === "local" && changes[STATE_KEY]) {
+      updateProgressUI(changes[STATE_KEY].newValue);
+    }
+  });
+
   card.querySelector("[data-open]").addEventListener("click", async (event) => {
     const button = event.currentTarget;
     button.disabled = true;
-    setCardStatus("Preparing the next 10 tickets...", "normal");
 
     try {
+      const configResult = await chrome.storage.local.get(CONFIG_KEY);
+      const batchSize = Number(configResult[CONFIG_KEY]?.batchSize) || 10;
+
+      setCardStatus(`Preparing the next ${batchSize} tickets...`, "normal");
+
       let allItems = getTicketItems();
       for (let attempt = 1; !allItems.length && attempt <= 3; attempt += 1) {
         await new Promise((resolve) => setTimeout(resolve, 500));
@@ -501,19 +730,18 @@ function createCard() {
       if (!pendingItems.length) {
         if (completedIds.size >= allItems.length) {
           await chrome.storage.local.set({ [STATE_KEY]: { signature, completedIds: [], reservedIds: [], reservedAt: {} } });
-          setCardStatus("All tickets in this list are complete. Click again to restart from the first 10.");
+          setCardStatus("All tickets in this list are complete. Click again to restart.");
         } else {
           setCardStatus("The current batch is still processing. Wait or inspect any open ticket tabs.");
         }
         return;
       }
 
-      const configResult = await chrome.storage.local.get(CONFIG_KEY);
       const savedMessages = configResult[CONFIG_KEY]?.messages;
       const messages = Array.isArray(savedMessages)
         ? DEFAULT_MESSAGES.map((fallback, index) => savedMessages[index] || fallback)
         : DEFAULT_MESSAGES;
-      const jobs = pendingItems.slice(0, BATCH_SIZE).map((item) => {
+      const jobs = pendingItems.slice(0, batchSize).map((item) => {
         const originalIndex = allItems.findIndex((candidate) => candidate.id === item.id);
         return {
           id: item.id,
