@@ -39,6 +39,18 @@ async function updateBatchState(ticketId, success) {
   });
 }
 
+// If an automation tab is closed by the user before reporting a result,
+// drop its job and release the ticket reservation so it can be retried immediately.
+chrome.tabs.onRemoved.addListener((tabId) => {
+  (async () => {
+    const stored = await chrome.storage.local.get(jobKey(tabId));
+    const job = stored[jobKey(tabId)];
+    if (!job) return;
+    await chrome.storage.local.remove(jobKey(tabId));
+    await updateBatchState(job.id, false);
+  })().catch((error) => console.error("Tab cleanup failed", error));
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message) return;
 

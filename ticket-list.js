@@ -168,7 +168,8 @@ function updateButtonText(batchSize) {
 
 async function restoreCardState(card) {
   await restoreCardPosition(card);
-  setMinimized(card, true);
+  const minimizedResult = await chrome.storage.local.get(MINIMIZED_STATE_KEY);
+  setMinimized(card, minimizedResult[MINIMIZED_STATE_KEY] !== false);
 
   const configResult = await chrome.storage.local.get(CONFIG_KEY);
   const config = configResult[CONFIG_KEY] || {};
@@ -329,7 +330,7 @@ function createCard() {
 
       <div class="ttbo-footer">
         <span class="ttbo-drag-hint">⠿ Drag to move</span>
-        <span class="ttbo-version">v2.3.1</span>
+        <span class="ttbo-version">v2.4.0</span>
       </div>
     </div>
     <button type="button" class="ttbo-mini" data-mini-drag-handle aria-label="Restore automation card" title="Click to open · Drag to move">
@@ -339,8 +340,6 @@ function createCard() {
 
   const style = document.createElement("style");
   style.textContent = `
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
     @keyframes ttbo-pulse-glow {
       0%   { box-shadow: 0 0 12px 1px rgba(34, 197, 94, 0.45), 0 3px 8px rgba(0, 0, 0, 0.15); }
       50%  { box-shadow: 0 0 24px 6px rgba(34, 197, 94, 0.8), 0 5px 14px rgba(0, 0, 0, 0.2); }
@@ -738,9 +737,10 @@ function createCard() {
       }
 
       const savedMessages = configResult[CONFIG_KEY]?.messages;
-      const messages = Array.isArray(savedMessages)
-        ? DEFAULT_MESSAGES.map((fallback, index) => savedMessages[index] || fallback)
-        : DEFAULT_MESSAGES;
+      const cleanedMessages = Array.isArray(savedMessages)
+        ? savedMessages.filter((message) => typeof message === "string" && message.trim())
+        : [];
+      const messages = cleanedMessages.length ? cleanedMessages : DEFAULT_MESSAGES;
       const jobs = pendingItems.slice(0, batchSize).map((item) => {
         const originalIndex = allItems.findIndex((candidate) => candidate.id === item.id);
         return {

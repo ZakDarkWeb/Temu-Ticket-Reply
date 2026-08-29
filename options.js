@@ -70,6 +70,9 @@ list.addEventListener("click", (event) => {
   const index = Number(row.dataset.index);
   const action = button.dataset.action;
 
+  // Keep any unsaved edits before reordering/deleting.
+  messages = readFields();
+
   if (action === "delete") {
     if (messages.length === 1) {
       showStatus("At least one message is required.", true);
@@ -85,6 +88,7 @@ list.addEventListener("click", (event) => {
 });
 
 document.getElementById("add").addEventListener("click", () => {
+  messages = readFields();
   messages.push("");
   render();
   list.lastElementChild?.querySelector("textarea")?.focus();
@@ -103,14 +107,16 @@ document.getElementById("save").addEventListener("click", async () => {
     return;
   }
   messages = values;
-  await chrome.storage.local.set({ [CONFIG_KEY]: { messages } });
+  const existing = await chrome.storage.local.get(CONFIG_KEY);
+  const config = existing[CONFIG_KEY] || {};
+  await chrome.storage.local.set({ [CONFIG_KEY]: { ...config, messages } });
   showStatus(`${messages.length} message${messages.length === 1 ? "" : "s"} saved successfully.`);
   render();
 });
 
 chrome.storage.local.get(CONFIG_KEY).then((result) => {
   const saved = result[CONFIG_KEY]?.messages;
-  messages = Array.isArray(saved) && saved.length ? [...saved] : [...DEFAULT_MESSAGES];
-  messages = messages.map((message, index) => message || DEFAULT_MESSAGES[index] || "");
+  const cleaned = Array.isArray(saved) ? saved.filter((message) => typeof message === "string" && message.trim()) : [];
+  messages = cleaned.length ? cleaned : [...DEFAULT_MESSAGES];
   render();
 });

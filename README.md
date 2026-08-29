@@ -1,4 +1,4 @@
-# Temu Ticket Automation — Exact icon and movable card v2.3.1
+# Temu Ticket Automation — Exact icon and movable card v2.4.0
 
 Yeh Chrome extension Temu Seller Center ke Information Ticket list page par professional logo ke saath top-right automation card show karti hai. Card ke **Run next 10 tickets** button se next 10 ticket detail pages controlled background tabs mein open hote hain. Har tab Reply, **Able to ship**, latest enabled date, `23:59:59`, rotating remarks, automatic Confirm submit, aur successful tab close workflow chalata hai.
 
