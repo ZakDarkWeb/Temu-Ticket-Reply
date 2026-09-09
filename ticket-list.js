@@ -116,11 +116,22 @@ function clampCardPosition(card, left, top) {
 async function restoreCardPosition(card) {
   const stored = await chrome.storage.local.get(DRAG_STATE_KEY);
   const position = stored[DRAG_STATE_KEY];
+  // If no saved position, CSS bottom/right defaults will place it at bottom-right
   if (!position || !Number.isFinite(position.left) || !Number.isFinite(position.top)) return;
+
+  // Migration v2.4.0: old default was top: 78px (top-right corner).
+  // Any position in the upper 50% of the viewport is a legacy position — clear it
+  // so the CSS  bottom: 24px; right: 24px  default takes effect automatically.
+  if (position.top < window.innerHeight * 0.5) {
+    await chrome.storage.local.remove(DRAG_STATE_KEY);
+    return;
+  }
+
   const safe = clampCardPosition(card, position.left, position.top);
   card.style.left = `${safe.left}px`;
   card.style.top = `${safe.top}px`;
   card.style.right = "auto";
+  card.style.bottom = "auto";
 }
 
 function setMinimized(card, minimized) {
@@ -130,6 +141,26 @@ function setMinimized(card, minimized) {
     button.textContent = minimized ? "" : "−";
     button.setAttribute("aria-label", minimized ? "Restore automation card" : "Minimize automation card");
     button.title = minimized ? "Restore" : "Minimize";
+  }
+  if (minimized) {
+    // Clear any JS-set position so CSS bottom: 24px; right: 24px takes over
+    // — mini ball always snaps back to the bottom-right corner
+    card.style.removeProperty("left");
+    card.style.removeProperty("top");
+    card.style.removeProperty("right");
+    card.style.removeProperty("bottom");
+  } else {
+    // After expanding to full card, clamp position so nothing goes off-screen.
+    // pointerdown pinned left/top from the 56x56 mini rect; the full card is
+    // taller/wider, so we re-clamp after the browser has laid out the new size.
+    requestAnimationFrame(() => {
+      const left = parseFloat(card.style.left);
+      const top  = parseFloat(card.style.top);
+      if (!Number.isFinite(left) || !Number.isFinite(top)) return; // CSS handles it
+      const safe = clampCardPosition(card, left, top);
+      card.style.left = `${safe.left}px`;
+      card.style.top  = `${safe.top}px`;
+    });
   }
 }
 
@@ -209,10 +240,11 @@ function makeCardDraggable(card) {
     const { handle, moved } = card._ttboDragging;
     card._ttboDragging = null;
     card.classList.remove("ttbo-dragging");
-    const rect = card.getBoundingClientRect();
-    const safe = clampCardPosition(card, rect.left, rect.top);
-    await chrome.storage.local.set({ [DRAG_STATE_KEY]: safe });
     if (moved) {
+      // Save position only after a real drag — never on a tap
+      const rect = card.getBoundingClientRect();
+      const safe = clampCardPosition(card, rect.left, rect.top);
+      await chrome.storage.local.set({ [DRAG_STATE_KEY]: safe });
       // Block the upcoming click event so the card does not open after dragging
       const blockClick = (e) => { e.stopImmediatePropagation(); e.preventDefault(); };
       handle.addEventListener("click", blockClick, { capture: true, once: true });
@@ -239,6 +271,7 @@ function makeCardDraggable(card) {
       card.style.left = `${rect.left}px`;
       card.style.top = `${rect.top}px`;
       card.style.right = "auto";
+      card.style.bottom = "auto";
       card.classList.add("ttbo-dragging");
       card._ttboDragging = {
         handle,
@@ -340,312 +373,349 @@ function createCard() {
 
   const style = document.createElement("style");
   style.textContent = `
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
     @keyframes ttbo-pulse-glow {
-      0%   { box-shadow: 0 0 12px 1px rgba(34, 197, 94, 0.45), 0 3px 8px rgba(0, 0, 0, 0.15); }
-      50%  { box-shadow: 0 0 24px 6px rgba(34, 197, 94, 0.8), 0 5px 14px rgba(0, 0, 0, 0.2); }
-      100% { box-shadow: 0 0 12px 1px rgba(34, 197, 94, 0.45), 0 3px 8px rgba(0, 0, 0, 0.15); }
+      0%,100% { box-shadow: 0 0 0 0 rgba(249,115,22,0.5), 0 8px 28px rgba(0,0,0,0.55); }
+      50%      { box-shadow: 0 0 0 7px rgba(249,115,22,0), 0 8px 28px rgba(0,0,0,0.55); }
     }
     @keyframes ttbo-shimmer {
       0%   { background-position: -200% center; }
-      100% { background-position: 200% center; }
+      100% { background-position:  200% center; }
     }
     @keyframes ttbo-badge-blink {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.4; }
+      0%,100% { opacity: 1; }
+      50%      { opacity: 0.45; }
     }
     @keyframes ttbo-dot-pulse {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50%       { transform: scale(1.5); opacity: 0.6; }
+      0%,100% { transform: scale(1);   box-shadow: 0 0 0 0 rgba(16,185,129,0.6); }
+      50%      { transform: scale(1.2); box-shadow: 0 0 0 5px rgba(16,185,129,0); }
     }
     @keyframes ttbo-slide-in {
-      from { opacity: 0; transform: translateY(6px) scale(0.97); }
-      to   { opacity: 1; transform: translateY(0) scale(1); }
+      from { opacity: 0; transform: translateY(14px) scale(0.94); }
+      to   { opacity: 1; transform: translateY(0)    scale(1);    }
+    }
+    @keyframes ttbo-sweep {
+      0%   { left: -100%; }
+      100% { left:  150%; }
+    }
+    @keyframes ttbo-float {
+      0%,100% { transform: translateY(0);   }
+      50%      { transform: translateY(-4px); }
+    }
+    @keyframes ttbo-bar-shine {
+      0%   { background-position: -200% center; }
+      100% { background-position:  200% center; }
     }
 
     /* ── Card wrapper ── */
     #${CARD_ID} {
-      position: fixed; top: 78px; right: 24px;
-      width: 300px; box-sizing: border-box;
-      background: #ffffff;
-      border: 1px solid rgba(0,0,0,0.08);
-      border-radius: 16px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.14), 0 2px 8px rgba(0,0,0,0.06);
+      position: fixed; bottom: 24px; right: 24px;
+      width: 308px; box-sizing: border-box;
+      background: linear-gradient(160deg, #13192e 0%, #0c1220 55%, #101828 100%);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 20px;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.04),
+        0 24px 60px rgba(0,0,0,0.6),
+        0 8px 20px rgba(0,0,0,0.35),
+        inset 0 1px 0 rgba(255,255,255,0.06);
       z-index: 2147483647;
-      font-family: 'Inter', Arial, sans-serif;
-      color: #1a1a2e;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      color: #e2e8f0;
       user-select: none;
       overflow: hidden;
-      transition: box-shadow 0.2s ease;
-      animation: ttbo-slide-in 0.3s ease both;
+      transition: box-shadow 0.25s ease, transform 0.2s ease;
+      animation: ttbo-slide-in 0.4s cubic-bezier(0.16,1,0.3,1) both;
     }
     #${CARD_ID}.ttbo-dragging {
-      box-shadow: 0 16px 48px rgba(0,0,0,0.22), 0 4px 12px rgba(0,0,0,0.1);
-      opacity: 0.96;
+      box-shadow:
+        0 0 0 1px rgba(249,115,22,0.2),
+        0 32px 80px rgba(0,0,0,0.7),
+        0 12px 28px rgba(0,0,0,0.4);
+      transform: scale(1.015);
+      cursor: grabbing;
     }
     #${CARD_ID}.ttbo-minimized {
-      width: 56px; height: 56px;
+      width: 54px; height: 54px;
       background: transparent; border: none;
       box-shadow: none; overflow: visible;
       border-radius: 50%;
     }
 
-    /* ── Dark header ── */
+    /* ── Header ── */
     #${CARD_ID} .ttbo-header {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 13px 14px 12px;
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 60%, #0f3460 100%);
+      padding: 14px 14px 13px;
+      background: linear-gradient(135deg, #1c2540 0%, #151d35 55%, #0e1628 100%);
+      border-bottom: 1px solid rgba(255,255,255,0.06);
       cursor: grab;
+      position: relative; overflow: hidden;
+    }
+    /* top accent line */
+    #${CARD_ID} .ttbo-header::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg,
+        transparent 0%, rgba(249,115,22,0.7) 40%,
+        rgba(251,146,60,0.5) 60%, transparent 100%);
     }
     #${CARD_ID} .ttbo-header:active { cursor: grabbing; }
-    #${CARD_ID} .ttbo-header-left { display: flex; align-items: center; gap: 10px; }
+    #${CARD_ID} .ttbo-header-left { display: flex; align-items: center; gap: 11px; }
 
-    /* Icon with live dot */
+    /* Icon */
     #${CARD_ID} .ttbo-icon-wrap { position: relative; flex: 0 0 auto; }
     #${CARD_ID} .ttbo-icon {
-      width: 38px; height: 38px; border-radius: 10px;
+      width: 38px; height: 38px; border-radius: 11px;
       object-fit: cover; display: block;
-      border: 2px solid rgba(255,255,255,0.15);
-      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      border: 1.5px solid rgba(249,115,22,0.35);
+      box-shadow: 0 4px 14px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
     }
     #${CARD_ID} .ttbo-icon-dot {
-      position: absolute; bottom: -1px; right: -1px;
-      width: 10px; height: 10px; border-radius: 50%;
-      background: #22c55e;
-      border: 2px solid #16213e;
-      animation: ttbo-dot-pulse 2s ease-in-out infinite;
+      position: absolute; bottom: -2px; right: -2px;
+      width: 11px; height: 11px; border-radius: 50%;
+      background: #10b981;
+      border: 2px solid #151d35;
+      animation: ttbo-dot-pulse 2.2s ease-in-out infinite;
     }
 
+    /* Title / badge */
     #${CARD_ID} .ttbo-header-text { line-height: 1; }
     #${CARD_ID} .ttbo-title {
-      font-size: 14px; font-weight: 700;
-      color: #ffffff; letter-spacing: 0.01em;
+      font-size: 13.5px; font-weight: 800;
+      color: #f1f5f9; letter-spacing: 0.01em;
     }
     #${CARD_ID} .ttbo-badge {
-      display: inline-block; margin-top: 4px;
-      font-size: 9px; font-weight: 600; letter-spacing: 0.08em;
-      color: #22c55e;
-      animation: ttbo-badge-blink 1.8s ease-in-out infinite;
+      display: inline-flex; align-items: center; gap: 4px;
+      margin-top: 4px;
+      font-size: 9px; font-weight: 700; letter-spacing: 0.12em;
+      color: #10b981;
+      animation: ttbo-badge-blink 2s ease-in-out infinite;
     }
 
     /* Minimize button */
     #${CARD_ID} .ttbo-minimize {
-      width: 26px; height: 26px; padding: 0;
+      width: 28px; height: 28px; padding: 0;
       display: flex; align-items: center; justify-content: center;
-      border: 1px solid rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.1);
       border-radius: 8px;
-      background: rgba(255,255,255,0.08);
-      color: rgba(255,255,255,0.7);
+      background: rgba(255,255,255,0.05);
+      color: rgba(255,255,255,0.45);
       cursor: pointer;
-      transition: background 0.15s, color 0.15s;
+      transition: background 0.18s, border-color 0.18s, color 0.18s;
       flex: 0 0 auto;
     }
     #${CARD_ID} .ttbo-minimize:hover {
-      background: rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.12);
+      border-color: rgba(255,255,255,0.22);
       color: #fff;
-    }
-
-    /* ── Controls panel ── */
-    #${CARD_ID} .ttbo-controls-panel {
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 12px;
-      padding: 10px 12px;
-      margin: 12px 14px 0;
-    }
-    #${CARD_ID} .ttbo-control-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 11px;
-      font-weight: 600;
-      color: #475569;
-    }
-    #${CARD_ID} .ttbo-select {
-      padding: 4px 8px;
-      border: 1px solid #cbd5e1;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 600;
-      font-family: inherit;
-      color: #475569;
-      background-color: #ffffff;
-      outline: none;
-      cursor: pointer;
-    }
-    #${CARD_ID} .ttbo-select:focus {
-      border-color: #ff6a00;
-    }
-    #${CARD_ID} .ttbo-divider {
-      height: 1px;
-      background: #e2e8f0;
-      margin: 8px 0;
-    }
-    #${CARD_ID} .ttbo-toggle-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 11px;
-      font-weight: 500;
-      color: #475569;
-      margin: 6px 0;
-    }
-    #${CARD_ID} .ttbo-toggle-row:last-child {
-      margin-bottom: 0;
-    }
-    #${CARD_ID} .ttbo-toggle-row:first-of-type {
-      margin-top: 0;
-    }
-    #${CARD_ID} .ttbo-toggle-text {
-      font-weight: 500;
-    }
-
-    /* Switch toggle slider styling */
-    #${CARD_ID} .ttbo-switch {
-      position: relative;
-      display: inline-block;
-      width: 32px;
-      height: 18px;
-    }
-    #${CARD_ID} .ttbo-switch input { 
-      opacity: 0; width: 0; height: 0;
-    }
-    #${CARD_ID} .ttbo-slider {
-      position: absolute; cursor: pointer;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background-color: #cbd5e1;
-      transition: .2s;
-      border-radius: 18px;
-    }
-    #${CARD_ID} .ttbo-slider:before {
-      position: absolute; content: "";
-      height: 12px; width: 12px;
-      left: 3px; bottom: 3px;
-      background-color: white;
-      transition: .2s;
-      border-radius: 50%;
-    }
-    #${CARD_ID} .ttbo-switch input:checked + .ttbo-slider {
-      background-color: #ff6a00;
-    }
-    #${CARD_ID} .ttbo-switch input:checked + .ttbo-slider:before {
-      transform: translateX(14px);
     }
 
     /* ── Progress bar ── */
     #${CARD_ID} .ttbo-progress-wrap {
-      padding: 12px 14px 0;
+      padding: 13px 14px 0;
     }
     #${CARD_ID} .ttbo-progress-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 5px;
-      font-size: 10px;
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 7px; font-size: 10px;
     }
     #${CARD_ID} .ttbo-progress-title {
-      font-weight: 700;
-      color: #ff6a00;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+      font-weight: 800; color: #f97316;
+      text-transform: uppercase; letter-spacing: 0.1em;
     }
     #${CARD_ID} .ttbo-progress-counter {
-      font-weight: 600;
-      color: #475569;
+      font-weight: 600; color: #64748b;
+      font-variant-numeric: tabular-nums;
     }
     #${CARD_ID} .ttbo-progress-bar-bg {
-      width: 100%;
-      height: 6px;
-      background: #e2e8f0;
-      border-radius: 3px;
-      overflow: hidden;
+      width: 100%; height: 5px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 999px; overflow: hidden;
     }
     #${CARD_ID} .ttbo-progress-bar-fill {
       height: 100%;
-      background: linear-gradient(90deg, #ff6a00, #ff8c38);
-      border-radius: 3px;
-      transition: width 0.4s ease;
+      background: linear-gradient(90deg, #ea580c, #f97316, #fb923c, #f97316, #ea580c);
+      background-size: 300% auto;
+      border-radius: 999px;
+      transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+      animation: ttbo-bar-shine 2.5s linear infinite;
+      box-shadow: 0 0 10px rgba(249,115,22,0.55);
+    }
+
+    /* ── Controls panel ── */
+    #${CARD_ID} .ttbo-controls-panel {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 13px;
+      padding: 11px 13px;
+      margin: 13px 12px 0;
+    }
+    #${CARD_ID} .ttbo-control-row {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 11px; font-weight: 600; color: #94a3b8;
+    }
+    #${CARD_ID} .ttbo-select {
+      padding: 5px 9px;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 7px;
+      font-size: 11px; font-weight: 600;
+      font-family: inherit; color: #e2e8f0;
+      background: rgba(255,255,255,0.06);
+      outline: none; cursor: pointer;
+      transition: border-color 0.15s;
+      appearance: auto;
+    }
+    #${CARD_ID} .ttbo-select:focus { border-color: #f97316; }
+    #${CARD_ID} .ttbo-select option { background: #13192e; color: #e2e8f0; }
+
+    #${CARD_ID} .ttbo-divider {
+      height: 1px; background: rgba(255,255,255,0.06); margin: 9px 0;
+    }
+    #${CARD_ID} .ttbo-toggle-row {
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 11px; font-weight: 500; color: #64748b;
+      margin: 6px 0;
+    }
+    #${CARD_ID} .ttbo-toggle-row:last-child  { margin-bottom: 0; }
+    #${CARD_ID} .ttbo-toggle-row:first-of-type { margin-top: 0; }
+    #${CARD_ID} .ttbo-toggle-text { color: #cbd5e1; font-weight: 500; }
+
+    /* Switch */
+    #${CARD_ID} .ttbo-switch {
+      position: relative; display: inline-block;
+      width: 34px; height: 19px;
+    }
+    #${CARD_ID} .ttbo-switch input { opacity: 0; width: 0; height: 0; }
+    #${CARD_ID} .ttbo-slider {
+      position: absolute; cursor: pointer;
+      inset: 0; background: rgba(255,255,255,0.12);
+      transition: .22s; border-radius: 999px;
+    }
+    #${CARD_ID} .ttbo-slider::before {
+      content: ''; position: absolute;
+      width: 13px; height: 13px;
+      left: 3px; bottom: 3px;
+      background: rgba(255,255,255,0.9);
+      transition: .22s; border-radius: 50%;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+    }
+    #${CARD_ID} .ttbo-switch input:checked + .ttbo-slider {
+      background: linear-gradient(135deg, #ea580c, #f97316);
+      box-shadow: 0 0 10px rgba(249,115,22,0.35);
+    }
+    #${CARD_ID} .ttbo-switch input:checked + .ttbo-slider::before {
+      transform: translateX(15px);
     }
 
     /* ── Run button ── */
     #${CARD_ID} .ttbo-run-btn {
-      display: flex; align-items: center; justify-content: center; gap: 7px;
-      width: calc(100% - 28px); margin: 12px 14px 0;
-      border: 0; border-radius: 10px; padding: 11px 14px;
-      background: linear-gradient(90deg, #ff6a00, #ff8c38, #ff6a00);
-      background-size: 200% auto;
-      color: #fff; font-size: 13px; font-weight: 700;
-      font-family: inherit;
-      cursor: pointer;
-      box-shadow: 0 4px 14px rgba(255,106,0,0.4);
-      transition: box-shadow 0.2s, transform 0.15s;
-      animation: ttbo-shimmer 3s linear infinite;
-      letter-spacing: 0.01em;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      width: calc(100% - 24px); margin: 13px 12px 0;
+      border: 0; border-radius: 13px; padding: 12px 16px;
+      background: linear-gradient(135deg, #c2410c 0%, #ea580c 35%, #f97316 65%, #fb923c 100%);
+      color: #fff; font-size: 13px; font-weight: 800;
+      font-family: inherit; letter-spacing: 0.03em;
+      cursor: pointer; position: relative; overflow: hidden;
+      box-shadow:
+        0 4px 20px rgba(249,115,22,0.45),
+        0 1px 4px rgba(0,0,0,0.4),
+        inset 0 1px 0 rgba(255,255,255,0.2);
+      transition: transform 0.18s ease, box-shadow 0.18s ease;
+    }
+    /* sweep-light hover effect */
+    #${CARD_ID} .ttbo-run-btn::after {
+      content: '';
+      position: absolute; top: 0; left: -100%;
+      width: 60%; height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+      skewX: -20deg;
+    }
+    #${CARD_ID} .ttbo-run-btn:hover::after {
+      animation: ttbo-sweep 0.55s ease forwards;
     }
     #${CARD_ID} .ttbo-run-btn:hover {
-      box-shadow: 0 6px 20px rgba(255,106,0,0.55);
-      transform: translateY(-1px);
+      transform: translateY(-2px);
+      box-shadow:
+        0 10px 32px rgba(249,115,22,0.6),
+        0 3px 8px rgba(0,0,0,0.4),
+        inset 0 1px 0 rgba(255,255,255,0.2);
     }
-    #${CARD_ID} .ttbo-run-btn:active { transform: translateY(0); }
+    #${CARD_ID} .ttbo-run-btn:active {
+      transform: translateY(0);
+      box-shadow: 0 2px 10px rgba(249,115,22,0.3), inset 0 1px 0 rgba(255,255,255,0.1);
+    }
     #${CARD_ID} .ttbo-run-btn:disabled {
-      background: #cbd5e1; box-shadow: none;
-      animation: none; cursor: wait; transform: none;
+      background: rgba(255,255,255,0.07);
+      color: rgba(255,255,255,0.25);
+      box-shadow: none; cursor: wait; transform: none;
     }
-    #${CARD_ID} .ttbo-btn-icon { font-size: 11px; }
+    #${CARD_ID} .ttbo-btn-icon { font-size: 10px; opacity: 0.85; }
 
     /* ── Status ── */
     #${CARD_ID} .ttbo-status-wrap {
-      display: flex; align-items: flex-start; gap: 6px;
-      padding: 8px 14px 0; min-height: 28px;
+      display: flex; align-items: flex-start; gap: 7px;
+      padding: 9px 14px 0; min-height: 28px;
     }
     #${CARD_ID} .ttbo-status-dot {
       width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto;
-      margin-top: 3px; background: #94a3b8;
-      transition: background 0.3s;
+      margin-top: 4px; background: rgba(255,255,255,0.18);
+      transition: background 0.3s, box-shadow 0.3s;
     }
-    #${CARD_ID} .ttbo-status-dot[data-kind="ok"]    { background: #22c55e; }
-    #${CARD_ID} .ttbo-status-dot[data-kind="error"] { background: #ef4444; }
+    #${CARD_ID} .ttbo-status-dot[data-kind="ok"]    {
+      background: #10b981; box-shadow: 0 0 7px rgba(16,185,129,0.6);
+    }
+    #${CARD_ID} .ttbo-status-dot[data-kind="error"] {
+      background: #ef4444; box-shadow: 0 0 7px rgba(239,68,68,0.6);
+    }
     #${CARD_ID} .ttbo-status {
-      font-size: 11px; line-height: 1.5; color: #64748b;
-      transition: color 0.3s;
+      font-size: 11px; line-height: 1.5; color: #475569; transition: color 0.3s;
     }
-    #${CARD_ID} .ttbo-status[data-kind="ok"]    { color: #15803d; }
-    #${CARD_ID} .ttbo-status[data-kind="error"] { color: #b91c1c; }
+    #${CARD_ID} .ttbo-status[data-kind="ok"]    { color: #10b981; }
+    #${CARD_ID} .ttbo-status[data-kind="error"] { color: #f87171; }
 
     /* ── Footer ── */
     #${CARD_ID} .ttbo-footer {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 8px 14px 12px; margin-top: 4px;
+      padding: 8px 14px 13px; margin-top: 5px;
+      border-top: 1px solid rgba(255,255,255,0.04);
     }
-    #${CARD_ID} .ttbo-drag-hint { font-size: 10px; color: #94a3b8; cursor: inherit; }
+    #${CARD_ID} .ttbo-drag-hint {
+      font-size: 10px; color: rgba(255,255,255,0.18);
+      cursor: inherit; letter-spacing: 0.04em;
+    }
     #${CARD_ID} .ttbo-version {
-      font-size: 10px; color: #cbd5e1; font-weight: 500;
+      font-size: 10px; color: rgba(255,255,255,0.14);
+      font-weight: 600; letter-spacing: 0.06em;
     }
 
     /* ── Minimized hide/show ── */
     #${CARD_ID}.ttbo-minimized .ttbo-full { display: none; }
     #${CARD_ID}.ttbo-minimized .ttbo-mini { display: block; }
 
-    /* ── Floating ball ── */
+    /* ── Floating mini ball ── */
     #${CARD_ID} .ttbo-mini {
       display: none; position: relative;
-      width: 56px; height: 56px;
-      padding: 0;
-      border: 4.5px solid #ffffff;
+      width: 54px; height: 54px; padding: 0;
+      border: 2.5px solid rgba(249,115,22,0.55);
       border-radius: 50%;
-      background: #ffffff;
-      box-shadow: 0 0 16px rgba(34, 197, 94, 0.65), 0 4px 10px rgba(0, 0, 0, 0.18);
+      background: linear-gradient(145deg, #1c2540 0%, #0e1628 100%);
       cursor: grab; touch-action: none; overflow: visible;
-      animation: ttbo-pulse-glow 2s ease-in-out infinite;
-      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      animation: ttbo-pulse-glow 2.4s ease-in-out infinite,
+                 ttbo-float 3.2s ease-in-out infinite;
+      transition: transform 0.22s cubic-bezier(0.16,1,0.3,1), box-shadow 0.22s ease;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5), 0 0 18px rgba(249,115,22,0.18);
     }
     #${CARD_ID} .ttbo-mini:hover {
-      transform: scale(1.05);
+      transform: scale(1.1);
+      box-shadow:
+        0 12px 32px rgba(0,0,0,0.6),
+        0 0 28px rgba(249,115,22,0.38),
+        0 0 0 3px rgba(249,115,22,0.55);
     }
-    #${CARD_ID} .ttbo-mini:active { cursor: grabbing; transform: scale(0.98); }
+    #${CARD_ID} .ttbo-mini:active { cursor: grabbing; transform: scale(0.95); }
     #${CARD_ID} .ttbo-mini img {
       display: block; width: 100%; height: 100%;
-      object-fit: cover; border-radius: 50%;
-      pointer-events: none;
+      object-fit: cover; border-radius: 50%; pointer-events: none;
     }
   `;
   document.documentElement.appendChild(style);
