@@ -363,7 +363,7 @@ function createCard() {
 
       <div class="ttbo-footer">
         <span class="ttbo-drag-hint">⠿ Drag to move</span>
-        <span class="ttbo-version">v2.4.0</span>
+        <span class="ttbo-version">v2.4.1</span>
       </div>
     </div>
     <button type="button" class="ttbo-mini" data-mini-drag-handle aria-label="Restore automation card" title="Click to open · Drag to move">

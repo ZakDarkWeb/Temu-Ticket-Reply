@@ -1,3 +1,4 @@
+// Temu Ticket Automation v2.4.1 - Detail Ticket Handler
 const JOB_LOOKUP_RETRIES = 12;
 const JOB_LOOKUP_DELAY_MS = 300;
 const STEP_TIMEOUT_MS = 15000;

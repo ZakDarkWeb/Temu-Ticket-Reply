@@ -1,3 +1,4 @@
+// Temu Ticket Automation v2.4.1 - Background Service Worker
 const DEFAULT_DELAY_MS = 2500;
 const JOB_KEY_PREFIX = "temuTicketJob:";
 const FAILURE_KEY = "temuTicketAutomationFailures";

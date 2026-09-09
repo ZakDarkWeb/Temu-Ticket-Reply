@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Temu Ticket Automation",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "Fast Temu ticket automation with draggable controls and rotating remarks.",
   "permissions": ["tabs", "storage"],
   "host_permissions": ["https://seller.temu.com/*"],

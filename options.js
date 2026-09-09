@@ -1,3 +1,4 @@
+// Temu Ticket Automation v2.4.1 - Options Handler
 const CONFIG_KEY = "temuTicketAutomationConfig";
 const MAX_CHARS = 1500;
 const DEFAULT_MESSAGES = [
